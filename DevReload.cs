@@ -99,10 +99,22 @@ public class DevReloadPlugin : IPlugin
 
             // Specify what is done when a file is changed, created, or deleted.
             Log.Debug($"Reloading {e.FullPath}");
+            bool wasRunning = BotManager.IsRunning;
+            if (wasRunning) {
+                BotManager.Stop();
+                Log.Debug($"Stop Bot for reload");
+                while (BotManager.IsRunning) {Thread.Sleep(500);}
+            }
+
             lastFileMD5 = md5;
             Store.DeinitializeAll();
             Store.LoadAssembly();
             Store.InitializeAll();
+
+            if (wasRunning) {
+                Log.Debug($"Start Bot for reload");
+                BotManager.Start();
+            }
         }
         catch (Exception ex)
         {
