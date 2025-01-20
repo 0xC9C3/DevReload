@@ -56,7 +56,7 @@ namespace DevReload.Proxy
                 {
                     DevReloadPlugin.Log.Debug($"[DevReload] found {targetType.Name} {b.Name}");
                     Type newProxyType = TypeFactory.CreateType(b.Name, proxyType);
-                    IBot botInstance = (IBot)Activator.CreateInstance(b);
+                    IBase botInstance = (IBase)Activator.CreateInstance(b);
                     string keyName = $"{targetType.Name}_{newProxyType.Name}";
                     innerInstances.Remove(keyName);
                     innerInstances.Add(keyName, botInstance);
