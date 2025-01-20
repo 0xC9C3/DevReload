@@ -24,10 +24,10 @@ namespace DevReload
                 UnloadAssembly();
             }
 
-            byte[] contents = File.ReadAllBytes(path);
-            System.IO.Stream ms = new System.IO.MemoryStream(contents);
-            context = new CollectibleAssemblyLoadContext();
-            return context.LoadFromStream(ms);
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                context = new CollectibleAssemblyLoadContext();
+                return context.LoadFromStream(fs);
+            }
         }
 
         public static void UnloadAssembly()

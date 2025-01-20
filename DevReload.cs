@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using DevReload.Proxy;
@@ -14,13 +15,13 @@ public class DevReloadPlugin : IPlugin
 {
     DevReloadPlugin()
     {
-        if (watcher != null)
+        if (fileWatcher != null)
         {
             return;
         }
 
         Log.Debug($"[DevReload] init - target {DevReload.Settings.Instance.TargetPath}");
-        watcher = CreateFileWatcher(DevReload.Settings.Instance.TargetPath);
+        fileWatcher = CreateFileWatcher(DevReload.Settings.Instance.TargetPath);
         Store.LoadAssembly();
     }
 
@@ -38,7 +39,7 @@ public class DevReloadPlugin : IPlugin
 
     public string Version => "stable";
 
-    private static FileSystemWatcher watcher;
+    private static FileSystemWatcher fileWatcher;
     private string lastFileMD5;
 
 
@@ -71,10 +72,14 @@ public class DevReloadPlugin : IPlugin
 
     private FileSystemWatcher CreateFileWatcher(string path)
     {
+        if (fileWatcher != null)
+        {
+            return fileWatcher;
+        }
+
         FileSystemWatcher watcher = new FileSystemWatcher();
         watcher.Path = Path.GetDirectoryName(path);
-        watcher.NotifyFilter = NotifyFilters.LastAccess | NotifyFilters.LastWrite
-           | NotifyFilters.FileName | NotifyFilters.DirectoryName;
+        watcher.NotifyFilter = NotifyFilters.LastWrite;
         watcher.Filter = Path.GetFileName(path);
 
         watcher.Changed += new FileSystemEventHandler(OnChanged);
@@ -84,19 +89,23 @@ public class DevReloadPlugin : IPlugin
 
     private void OnChanged(object source, FileSystemEventArgs e)
     {
-        try {
+        try
+        {
             string md5 = CalcFileMD5(e.FullPath);
-            if (lastFileMD5 == md5) {
+            if (lastFileMD5 == md5)
+            {
                 return;
             }
 
             // Specify what is done when a file is changed, created, or deleted.
             Log.Debug($"Reloading {e.FullPath}");
-            lastFileMD5 = md5; 
+            lastFileMD5 = md5;
             Store.DeinitializeAll();
             Store.LoadAssembly();
             Store.InitializeAll();
-        } catch(Exception ex) {
+        }
+        catch (Exception ex)
+        {
             Log.Error($"Error during reload {ex}");
         }
     }
@@ -105,11 +114,36 @@ public class DevReloadPlugin : IPlugin
     {
         using (var md5 = MD5.Create())
         {
-            using (var stream = File.OpenRead(path))
+            using (var stream = WaitForLockedFile(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-","").ToLower();
+                return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+            }
+        }
+    }
+
+    // https://stackoverflow.com/a/3677960
+    private static FileStream WaitForLockedFile(string fullPath, FileMode mode, FileAccess access, FileShare share)
+    {
+        for (int numTries = 0; numTries < 10; numTries++)
+        {
+            FileStream fs = null;
+            try
+            {
+                fs = new FileStream(fullPath, mode, access, share);
+                return fs;
+            }
+            catch (IOException)
+            {
+                if (fs != null)
+                {
+                    fs.Dispose();
+                }
+                Thread.Sleep(50);
             }
         }
 
+        Log.Error($"Failed to wait for file");
+
+        return null;
     }
 }
