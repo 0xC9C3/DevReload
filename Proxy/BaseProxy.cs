@@ -1,35 +1,102 @@
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using DreamPoeBot.Common;
 using DreamPoeBot.Loki.Bot;
+using DreamPoeBot.Loki.Bot.Pathfinding;
 using DreamPoeBot.Loki.Common;
 
 namespace DevReload.Proxy
 {
-    public abstract class BaseProxy<T> where T : IConfigurable, IMessageHandler, IAuthored, IBase, ILogicProvider
+    public abstract class BaseProxy: IConfigurable, IMessageHandler, IAuthored, IBase, ILogicProvider, IStartStopEvents, ITickEvents
     {
 
-        protected T _innerInstance {
+        protected object _innerInstance {
             get {
-                return Store.GetInnerInstanceByType<T>(this.GetType());
+                return Store.GetInnerInstanceByType(this.GetType());
             }
         }
 
-        public UserControl Control => _innerInstance.Control;
-        public JsonSettings Settings => _innerInstance.Settings;
-        public MessageResult Message(Message message) => _innerInstance.Message(message);
+        protected M getInnerInstance<M>() {
+            return (M)(object)_innerInstance;
+        }
 
-        public string Author => _innerInstance.Author;
+        protected bool innerInstanceImplements<M>() {
+            return _innerInstance.GetType().GetInterfaces().FirstOrDefault(i => i == typeof(M), null) != null;
+        }
 
-        public string Description => _innerInstance.Description;
+        public UserControl Control => getInnerInstance<IConfigurable>().Control;
+        public JsonSettings Settings => getInnerInstance<IConfigurable>().Settings;
+        public MessageResult Message(Message message) => getInnerInstance<IMessageHandler>().Message(message);
 
-        public string Name => "Proxied " + _innerInstance.Name;
+        public string Author => getInnerInstance<IAuthored>().Author;
 
-        public string Version => _innerInstance.Version;
+        public string Description => getInnerInstance<IAuthored>().Description;
 
-        public void Deinitialize() => _innerInstance.Deinitialize();
+        public string Name => "Proxied " + getInnerInstance<IAuthored>().Name;
 
-        public void Initialize() => _innerInstance.Initialize();
+        public string Version => getInnerInstance<IAuthored>().Version;
 
-        public Task<LogicResult> Logic(Logic logic) => _innerInstance.Logic(logic);
+        public PathfindingCommand CurrentCommand => getInnerInstance<IPlayerMover>().CurrentCommand;
+
+        public void Deinitialize() => getInnerInstance<IBase>().Deinitialize();
+
+        public void Initialize() => getInnerInstance<IBase>().Initialize();
+
+        public Task<LogicResult> Logic(Logic logic) => getInnerInstance<ILogicProvider>().Logic(logic);
+
+        public void Start()
+        {
+            if (!innerInstanceImplements<IStartStopEvents>()) {
+                return;
+            }
+
+            getInnerInstance<IStartStopEvents>().Start();
+        }
+
+        public void Stop()
+        {
+            if (!innerInstanceImplements<IStartStopEvents>()) {
+                return;
+            }
+
+            getInnerInstance<IStartStopEvents>().Start();
+        }
+
+        public void Tick()
+        {
+            if (!innerInstanceImplements<ITickEvents>()) {
+                return;
+            }
+
+            getInnerInstance<ITickEvents>().Tick();
+        }
+
+        public bool MoveTowards(Vector2i position, params dynamic[] user)
+        {
+            if (!innerInstanceImplements<IPlayerMover>()) {
+                return false;
+            }
+
+            return getInnerInstance<IPlayerMover>().MoveTowards(position, user);
+        }
+
+        public void Disable()
+        {
+            if (!innerInstanceImplements<IPlugin>()) {
+                return;
+            }
+
+            getInnerInstance<IPlugin>().Disable();
+        }
+
+        public void Enable()
+        {
+            if (!innerInstanceImplements<IPlugin>()) {
+                return;
+            }
+
+            getInnerInstance<IPlugin>().Enable();
+        }
     }
 }
